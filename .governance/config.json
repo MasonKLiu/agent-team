@@ -1,0 +1,41 @@
+{
+  "source_root": "src",
+  "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+  "layers": {
+    "core": { "path": "src/core", "may_import": [] },
+    "domain": { "path": "src/domain", "may_import": ["core"] },
+    "ui": { "path": "src/ui", "may_import": ["domain", "core"] }
+  },
+  "banned_primitives": [
+    {
+      "pattern": "\\buseEffect\\s*\\(",
+      "layers": ["ui", "domain"],
+      "name": "raw useEffect",
+      "remediation": "Move the side effect into a declarative hook exported from src/core (e.g. useSubscription, useQuery) and call that instead."
+    },
+    {
+      "pattern": "\\buseLayoutEffect\\s*\\(",
+      "layers": ["ui", "domain"],
+      "name": "raw useLayoutEffect",
+      "remediation": "Move the layout side effect into a declarative API in src/core."
+    }
+  ],
+  "suppression_patterns": [
+    "@ts-ignore",
+    "@ts-expect-error",
+    "@ts-nocheck",
+    "eslint-disable",
+    "\\bsetTimeout\\s*\\("
+  ],
+  "justification_comment_patterns": [
+    "//\\s*(because|hack|workaround|this is needed|needed because|don't touch|do not touch)\\b",
+    "/\\*\\s*(because|hack|workaround)\\b"
+  ],
+  "unauthorized_type_assertions": [
+    "\\bas\\s+any\\b",
+    "\\bas\\s+unknown\\s+as\\b",
+    "<any>"
+  ],
+  "artifact_required_paths": ["src/ui/", "src/core/"],
+  "invariant_paths": []
+}

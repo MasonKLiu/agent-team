@@ -1,0 +1,41 @@
+name: RFC-001 merge gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checker self-tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Agent team structure (TEAM-*)
+        run: python scripts/check_team.py
+
+      - name: Gates 1, 2, 4 and ratchet (push)
+        if: github.event_name == 'push'
+        run: python scripts/check_governance.py
+
+      - name: Gates 1-4 and ratchet (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.md"
+          python scripts/check_governance.py \
+            --changed-from "$BASE_REF" \
+            --baseline-ref "$BASE_REF" \
+            --pr-body-file "$RUNNER_TEMP/pr_body.md"
