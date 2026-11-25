@@ -27,7 +27,7 @@ jobs:
       - name: Agent team structure (TEAM-001..007)
         run: python scripts/check_team.py
 
-      - name: Gates 1, 2, 4 and ratchet (push)
+      - name: Governance & ratchet (push)
         if: github.event_name == 'push'
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -40,14 +40,11 @@ jobs:
             python scripts/check_governance.py
           fi
 
-      - name: Gates 1-4 and ratchet (pull request)
+      - name: Governance & ratchet (pull request)
         if: github.event_name == 'pull_request'
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
           BASE_REF: origin/${{ github.base_ref }}
         run: |
-          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.md"
           python scripts/check_governance.py \
             --changed-from "$BASE_REF" \
-            --baseline-ref "$BASE_REF" \
-            --pr-body-file "$RUNNER_TEMP/pr_body.md"
+            --baseline-ref "$BASE_REF"

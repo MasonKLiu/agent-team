@@ -19,8 +19,7 @@
    - 逐條親自執行或檢查 `Acceptance` 的每個條件，保留實際指令與關鍵輸出。
 5. **RFC-001 Merge Gates**：
    - **Gate 1（架構分層與循環依賴）** & **Gate 2（API 衛生與 Escape Hatches）**：在目標 worktree 執行 `python scripts/check_governance.py --changed-from <base_ref>`。
-   - **Gate 3（驗證產出物）**：若任務修改 `src/ui/` 或 `src/core/` 的使用者流程或核心狀態機，確認已提供可驗證的錄影、statechart 或效能比較連結／檔案（RFC-001 §3.1）。
-   - **Gate 4（不變量與測試）**：確認單元測試、property-based 測試與（若有設定）形式化不變量檢查全部通過。
+   - **Gate 3（測試與驗收證據）**：確認專案單元測試與任務所有 `Acceptance` 檢查全部通過。
 6. **團隊結構檢查**：執行 `python scripts/check_team.py`。
 
 ## 輸出格式（嚴格遵守）

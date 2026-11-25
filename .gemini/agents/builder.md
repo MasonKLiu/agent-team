@@ -26,7 +26,7 @@ tools:
 
 1. 確認自己身處該任務專屬的隔離 worktree（若工作目錄是主 repo 且未隔離，立即停下並回報 Orchestrator）。
 2. 讀取 `STATE.md` 的「Rules learned」，全部遵守。
-3. 讀取 `docs/standards/RFC-001.md`（特別是 §2 分層與 API 衛生、§4.1 新增或修改的檔案須 100% 合規）。
+3. 讀取 `docs/standards/RFC-001.md`（特別是 §2 分層與 API 衛生、§3.1 新增或修改的檔案須 100% 合規）。
 4. 讀取 `PLAN.md` 中指定任務 ID 的 `Files` 與 `Acceptance`。
 
 ## 工作規則

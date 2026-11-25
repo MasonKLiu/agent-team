@@ -24,7 +24,7 @@
 - **補齊 Worktree → Verifier → Merge → Integration 交接**：明確定義 builder commit 格式、verifier 進入目標 worktree 驗收、以及平行合併 ≥ 2 個任務後的整合驗證（見 `.agent-team/protocols/handoff-and-worktree.md`）。
 - **打通 `REPEAT:` 閉環**：在 `STATE.md` 新增 `## Failure log (1st occurrence)`，解決無狀態 verifier 永遠記不得上一次失敗的矛盾；且 `TEAM-005` 改採精確規則 ID／測試函式名稱比對，並納入 `tests/` 掃描。
 - **補齊 `Files` 範圍檢查與依賴檢查**：新增 `scripts/verify_scope.py`（`SCOPE-001/002`）實際比對 `git diff` 與 `PLAN.md` 白名單；`TEAM-004` 驗證 `Owner`、`Depends on` 就緒狀態、以及 `doing + verify` 跨狀態路徑正規化重疊（含目錄前綴）。
-- **升級靜態掃描與計數型 Ratchet**：`check_governance.py` 改為具註解／字串感知的全文掃描，能正確抓出多行 import、不誤報註解字串、不因無效過期日 crash、以違規次數鎖死棘輪、將 `setTimeout` 限定於 `ui/domain` 禁用（保留 `core` 封裝能力）、支援中英文補丁註解偵測，並收緊 `GOV-311` Artifact 驗證與 `GOV-321` `tests/` 搜尋。
+- **升級靜態掃描與計數型 Ratchet**：`check_governance.py` 改為具註解／字串感知的全文掃描，能正確抓出多行 import、不誤報註解字串、不因無效過期日 crash、以違規次數鎖死棘輪、將 `setTimeout` 限定於 `ui/domain` 禁用（保留 `core` 封裝能力）、支援中英文補丁註解偵測，並移除缺乏配套工具的空泛條款（如強制錄影與 TLA+ 檔案檢查），確保 RFC-001 每一條文皆有 100% 實際自動化檢查。
 
 ---
 
@@ -58,7 +58,7 @@ src/core    → 不可 import 上層；所有副作用與計時器都封裝在�
 
 ---
 
-## 計數型 Ratchet（RFC-001 §4.1）
+## 計數型 Ratchet（RFC-001 §3.1）
 
 導入既有專案時（限人類設定 `ALLOW_BASELINE_WRITE=1` 後執行）：
 
@@ -77,5 +77,5 @@ python scripts/check_governance.py --write-baseline
 ## 已知邊界與擴充建議
 
 - import 掃描目前支援 JS/TS（相對路徑、`@/` alias、多行 `import`/`export`/`require`/動態 `import()`）。當專案規模超過數百檔時，建議引入 `dependency-cruiser` 並將其設定檔保留於專案根目錄（`TEAM-005` 已自動納入規則 ID 掃描）。
-- §3.2 TLA+ 目前檢查對應 `.tla` 或 property test 是否存在（支援同目錄與 `tests/`），需要形式化模型檢驗時可在 `.github/workflows/team-check.yml` 補上 TLC 執行步驟。
+- 若目標專案改為 Python / Go 等非 JS/TS 技術棧，請依專案語言調整 `.governance/config.json` 或於 CI 接上該語言的 linter（如 `ruff`、`mypy`、`import-linter`）。
 - 若未來要重新加入 Codex 或 Cursor 等第三個 AI 平台，只需依 `.agent-team/protocols/adapters.md` 新增 `.agent-team/adapters/<name>.json` 並註冊至 `.agent-team/config.json`。

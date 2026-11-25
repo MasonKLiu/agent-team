@@ -95,7 +95,7 @@ def check_scope(
                     "SCOPE-002",
                     norm,
                     0,
-                    f"Task {task_id} modified .governance/baseline.json, which agents are forbidden from altering (RFC-001 §4.1).",
+                    f"Task {task_id} modified .governance/baseline.json, which agents are forbidden from altering (RFC-001 §3.1).",
                     "Revert changes to .governance/baseline.json and fix the underlying violation.",
                 )
             )

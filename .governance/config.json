@@ -23,7 +23,7 @@
       "pattern": "\\bsetTimeout\\s*\\(",
       "layers": ["ui", "domain"],
       "name": "raw setTimeout",
-      "remediation": "Do not use setTimeout for timing workarounds in ui/domain (RFC-001 §2.3). Encapsulate legitimate timers as a declarative API in src/core."
+      "remediation": "Do not use setTimeout for timing workarounds in ui/domain (RFC-001 §2.1). Encapsulate legitimate timers as a declarative API in src/core."
     }
   ],
   "suppression_patterns": [
@@ -41,7 +41,5 @@
     "\\bas\\s+any\\b",
     "\\bas\\s+unknown\\s+as\\b",
     "<any>"
-  ],
-  "artifact_required_paths": ["src/ui/", "src/core/"],
-  "invariant_paths": []
+  ]
 }

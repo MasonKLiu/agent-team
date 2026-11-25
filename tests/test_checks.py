@@ -116,23 +116,6 @@ class GovernanceTests(unittest.TestCase):
         self.s.write("src/core/a.ts", "const y = 1;\n")
         self.assertEqual(self.s.gov(), ["GOV-411"])
 
-    def test_artifact_required_rejects_placeholders(self):
-        changed = {"src/ui/page.tsx"}
-        self.assertEqual(self.s.gov(changed=changed, pr_body="no artifact"), ["GOV-311"])
-        self.assertEqual(self.s.gov(changed=changed, pr_body="Artifact: none"), ["GOV-311"])
-        self.assertEqual(self.s.gov(changed=changed, pr_body="Artifact: N/A"), ["GOV-311"])
-        self.assertEqual(self.s.gov(changed=changed, pr_body="Artifact: https://example.com/rec.mp4"), [])
-        self.assertEqual(self.s.gov(changed=changed, pr_body="Artifact: artifacts/statechart.svg"), [])
-
-    def test_invariants_accepts_tests_directory(self):
-        cfg = json.loads((self.s.root / ".governance" / "config.json").read_text(encoding="utf-8"))
-        cfg["invariant_paths"] = ["src/core/machine.ts"]
-        self.s.write(".governance/config.json", json.dumps(cfg))
-        self.s.write("src/core/machine.ts", "export const state = 'idle';\n")
-        self.assertEqual(self.s.gov(), ["GOV-321"])
-        self.s.write("tests/machine.property.test.ts", "test('invariants', () => {});\n")
-        self.assertEqual(self.s.gov(), [])
-
 
 class TeamTests(unittest.TestCase):
     def test_repo_itself_passes_all_team_and_sync_checks(self):

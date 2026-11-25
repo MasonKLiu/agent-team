@@ -529,7 +529,7 @@ def check_entrypoints(root: Path) -> list[Violation]:
                                 "TEAM-006",
                                 settings_rel,
                                 0,
-                                f"Permission allow rule '{item}' permits agents to run '--write-baseline' and bypass the RFC-001 §4.1 ratchet.",
+                                f"Permission allow rule '{item}' permits agents to run '--write-baseline' and bypass the RFC-001 §3.1 ratchet.",
                                 "Restrict allow rules to safe read-only invocations of check_governance.py and deny '--write-baseline'.",
                             )
                         )

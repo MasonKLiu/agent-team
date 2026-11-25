@@ -2,18 +2,20 @@
 
 Zero dependencies. Every violation carries Rule ID, Root Cause and Remediation (RFC-001 §1.2).
 
-Improvements over v1:
-  - Comment/string-aware JS/TS scanner: eliminates false positives in comments/strings
-  - Full-file multi-line import/export parsing (catches multi-line imports for GOV-221/222)
-  - Safe ISO date validation for GOV-231/232 (no ValueError crashes on invalid dates)
-  - Count-aware Ratchet baseline (cannot add extra violations to a grandfathered file)
-  - Hardened GOV-311 review artifact validation (rejects placeholder values like 'none')
-  - GOV-321 checks both colocated siblings and mirrored tests/ directory
+Checks:
+  GOV-201  Banned low-level primitives in ui/domain (RFC-001 §2.1)
+  GOV-221  Cross-layer reverse imports (RFC-001 §2.2, multi-line aware)
+  GOV-222  Circular dependencies (RFC-001 §2.2)
+  GOV-231  Unregistered or malformed escape hatches (RFC-001 §2.3)
+  GOV-232  Expired escape hatches (RFC-001 §2.3)
+  GOV-233  Workaround/excuse comments in real comment blocks (RFC-001 §2.3)
+  GOV-234  Unauthorized type assertions (RFC-001 §2.3)
+  GOV-411  Stale baseline entries that must tighten (RFC-001 §3.1)
+  GOV-412  Baseline growth blocked by monotonic ratchet (RFC-001 §3.1)
 
 Usage:
   python scripts/check_governance.py
   python scripts/check_governance.py --changed-from origin/main
-  python scripts/check_governance.py --changed-from origin/main --pr-body-file body.md
   python scripts/check_governance.py --baseline-ref origin/main
   python scripts/check_governance.py --write-baseline
 """
@@ -36,11 +38,6 @@ IMPORT_RE = re.compile(
     re.DOTALL,
 )
 REGISTRATION_RE = re.compile(r"expires=(\d{4}-\d{2}-\d{2})\s+ticket=([A-Z][A-Z0-9]*-\d+)")
-ARTIFACT_LINE_RE = re.compile(r"^\s*[-*]?\s*Artifact:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
-ARTIFACT_VALID_VALUE_RE = re.compile(
-    r"(?:https?://\S+|!?\[[^\]]*\]\([^)]+\)|(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]{2,5})"
-)
-ARTIFACT_PLACEHOLDERS = {"none", "n/a", "na", "todo", "tbd", "-", "null", "skip"}
 
 
 def load_config(root: Path) -> dict:
@@ -48,7 +45,7 @@ def load_config(root: Path) -> dict:
 
 
 def _parse_baseline_data(data: dict) -> dict[tuple[str, str], int]:
-    """Support both v2 count-aware {'counts': {'RULE::file': n}} and legacy {'violations': [[rule, file]]}."""
+    """Support both count-aware {'counts': {'RULE::file': n}} and legacy {'violations': [[rule, file]]}."""
     counts: dict[tuple[str, str], int] = {}
     if isinstance(data.get("counts"), dict):
         for raw_key, count in data["counts"].items():
@@ -270,9 +267,8 @@ def check_file_lines(root: Path, path: Path, cfg: dict, today: dt.date) -> list[
                         "GOV-233",
                         r,
                         no,
-                        "Justification comment found; code must explain itself (RFC-001 §2.3).",
-                        "Delete the comment. If the constraint matters, encode it as a type, a named "
-                        "function, or a check in scripts/check_governance.py.",
+                        "Workaround/excuse comment found; fix the root cause instead of justifying a patch (RFC-001 §2.3).",
+                        "Remove the workaround and delete the comment. Encode invariants as types, helper APIs, or deterministic checks.",
                     )
                 )
                 break
@@ -284,7 +280,7 @@ def check_file_lines(root: Path, path: Path, cfg: dict, today: dt.date) -> list[
                         "GOV-234",
                         r,
                         no,
-                        "Unauthorized type assertion bypasses the type checker (RFC-001 Gate 2).",
+                        "Unauthorized type assertion bypasses the type checker (RFC-001 §2.3).",
                         "Replace the assertion with a type guard or a properly typed API.",
                     )
                 )
@@ -373,33 +369,6 @@ def find_cycles(root: Path, graph: dict[Path, list[tuple[Path, int]]]) -> list[V
     return out
 
 
-def check_invariants(root: Path, cfg: dict) -> list[Violation]:
-    out = []
-    tests_dir = root / "tests"
-    proof_re = re.compile(r"\.(test|spec|property|invariant)\.|\.tla$")
-    for pattern in cfg.get("invariant_paths", []):
-        for path in sorted(root.glob(pattern)):
-            if not path.is_file():
-                continue
-            stem = path.name.split(".")[0]
-            candidates = list(path.parent.glob(f"{stem}.*"))
-            if tests_dir.exists():
-                candidates += list(tests_dir.rglob(f"{stem}.*"))
-                candidates += list(tests_dir.rglob(f"test_{stem}.*"))
-            proofs = [c for c in candidates if proof_re.search(c.name) or c.name.startswith(f"test_{stem}.")]
-            if not proofs:
-                out.append(
-                    Violation(
-                        "GOV-321",
-                        rel(root, path),
-                        0,
-                        "Core state machine has no formal invariant or property-based test (RFC-001 §3.2).",
-                        f"Add {stem}.property.test.ts (next to it or under tests/) or {stem}.tla (TLA+ spec).",
-                    )
-                )
-    return out
-
-
 def changed_files(root: Path, ref: str) -> set[str]:
     result = subprocess.run(
         ["git", "diff", "--name-only", f"{ref}...HEAD"],
@@ -409,31 +378,6 @@ def changed_files(root: Path, ref: str) -> set[str]:
         check=True,
     )
     return {line.strip() for line in result.stdout.splitlines() if line.strip()}
-
-
-def has_valid_artifact(body: str) -> bool:
-    for match in ARTIFACT_LINE_RE.finditer(body):
-        val = match.group(1).strip()
-        if val.lower() in ARTIFACT_PLACEHOLDERS:
-            continue
-        if ARTIFACT_VALID_VALUE_RE.search(val):
-            return True
-    return False
-
-
-def check_artifacts(changed: set[str], body: str, cfg: dict) -> list[Violation]:
-    touched = sorted(f for f in changed if any(f.startswith(p) for p in cfg["artifact_required_paths"]))
-    if touched and not has_valid_artifact(body):
-        return [
-            Violation(
-                "GOV-311",
-                "PR description",
-                0,
-                f"PR touches {', '.join(touched[:5])} but has no valid review artifact link/path (RFC-001 §3.1).",
-                "Add 'Artifact: https://...' or 'Artifact: artifacts/recording.mp4' (placeholders like 'none' are rejected).",
-            )
-        ]
-    return []
 
 
 def baseline_at(root: Path, ref: str) -> dict[tuple[str, str], int]:
@@ -452,7 +396,6 @@ def run(
     root: Path,
     changed: set[str] | None = None,
     today: dt.date | None = None,
-    pr_body: str | None = None,
     baseline_ref: str | None = None,
 ) -> tuple[list[Violation], list[Violation], list[str]]:
     """Return (blocking violations, all raw violations, notes)."""
@@ -465,7 +408,6 @@ def run(
     graph, layer_violations = build_graph(root, files, cfg)
     raw += layer_violations
     raw += find_cycles(root, graph)
-    raw += check_invariants(root, cfg)
 
     baseline = load_baseline(root)
     changed = changed or set()
@@ -482,7 +424,7 @@ def run(
         else:
             blocking.append(v)
 
-    notes = [f"Grandfathered by baseline (RFC-001 §4.1): {grandfathered}"] if grandfathered else []
+    notes = [f"Grandfathered by baseline (RFC-001 §3.1): {grandfathered}"] if grandfathered else []
 
     current_counts = Counter(v.key() for v in raw)
     for (rule_id, file), base_count in sorted(baseline.items()):
@@ -493,7 +435,7 @@ def run(
                     "GOV-411",
                     ".governance/baseline.json",
                     0,
-                    f"Baseline entry [{rule_id}, {file}] dropped from {base_count} to {actual_count}; the debt is paid and the ratchet must tighten (RFC-001 §4.1).",
+                    f"Baseline entry [{rule_id}, {file}] dropped from {base_count} to {actual_count}; the debt is paid and the ratchet must tighten (RFC-001 §3.1).",
                     f"Update or remove '{rule_id}::{file}' in .governance/baseline.json to {actual_count}.",
                 )
             )
@@ -508,13 +450,10 @@ def run(
                         "GOV-412",
                         ".governance/baseline.json",
                         0,
-                        f"Baseline grew for [{rule_id}, {file}] ({prev_count} -> {count}); the ratchet only moves one way (RFC-001 §4.1).",
+                        f"Baseline grew for [{rule_id}, {file}] ({prev_count} -> {count}); the ratchet only moves one way (RFC-001 §3.1).",
                         "Fix the new violation instead of increasing the baseline.",
                     )
                 )
-
-    if pr_body is not None:
-        blocking += check_artifacts(changed, pr_body, cfg)
 
     return blocking, raw, notes
 
@@ -523,15 +462,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=Path(__file__).resolve().parent.parent, type=Path)
     parser.add_argument("--changed-from", help="git ref; files changed since it lose baseline protection")
-    parser.add_argument("--pr-body-file", type=Path, help="PR description, enables GOV-311")
     parser.add_argument("--baseline-ref", help="git ref whose baseline the current one must not exceed")
     parser.add_argument("--write-baseline", action="store_true", help="record current violations as legacy debt (human only)")
     args = parser.parse_args()
 
     root = args.root.resolve()
     changed = changed_files(root, args.changed_from) if args.changed_from else set()
-    body = args.pr_body_file.read_text(encoding="utf-8") if args.pr_body_file else None
-    blocking, raw, notes = run(root, changed, pr_body=body, baseline_ref=args.baseline_ref)
+    blocking, raw, notes = run(root, changed, baseline_ref=args.baseline_ref)
 
     if args.write_baseline:
         counts = Counter(v.key() for v in raw)

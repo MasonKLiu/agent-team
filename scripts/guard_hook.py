@@ -111,7 +111,7 @@ def evaluate_event(
                 False,
                 _format_block(
                     "GUARD-005",
-                    "Direct modification of .governance/baseline.json violates the RFC-001 §4.1 ratchet.",
+                    "Direct modification of .governance/baseline.json violates the RFC-001 §3.1 ratchet.",
                     "Fix the underlying violation instead of editing baseline.json. Only humans may refresh the baseline.",
                 ),
             )
@@ -126,7 +126,7 @@ def evaluate_event(
                 False,
                 _format_block(
                     "GUARD-005",
-                    "Running '--write-baseline' is forbidden for autonomous agents (RFC-001 §4.1).",
+                    "Running '--write-baseline' is forbidden for autonomous agents (RFC-001 §3.1).",
                     "Run 'python scripts/check_governance.py' without '--write-baseline' and fix reported violations.",
                 ),
             )
