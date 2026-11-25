@@ -3,23 +3,45 @@
   "model": "claude-fable-5-2",
   "permissions": {
     "allow": [
-      "Bash(python scripts/check_team.py:*)",
-      "Bash(python scripts/check_governance.py:*)",
-      "Bash(python -m unittest:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(python scripts/check_team.py)",
+      "Bash(python scripts/check_team.py --root *)",
+      "Bash(python scripts/check_governance.py)",
+      "Bash(python scripts/check_governance.py --changed-from *)",
+      "Bash(python scripts/verify_scope.py *)",
+      "Bash(python scripts/sync_adapters.py --check)",
+      "Bash(python scripts/worktree_ops.py *)",
+      "Bash(python -m unittest *)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
     ],
     "ask": [
-      "Bash(git push:*)",
-      "Bash(npm install:*)",
-      "Bash(pip install:*)"
+      "Bash(git push *)",
+      "Bash(gh pr create *)",
+      "Bash(npm install *)",
+      "Bash(pip install *)"
     ],
     "deny": [
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
+      "Bash(python scripts/check_governance.py --write-baseline*)",
       "Edit(.governance/baseline.json)",
       "Write(.governance/baseline.json)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/guard_hook.py\" --adapter claude"
+          }
+        ]
+      }
     ]
   }
 }

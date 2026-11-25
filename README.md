@@ -1,103 +1,144 @@
-# Agent Team
+# Agent Team（v2 — 80/20 跨 AI 工程治理框架）
 
-用「一個 orchestrator + 多個專職 worker」取代「一個什麼都做的 agent」的 Claude Code 專案骨架。
+一套參考 GitHub 最佳多 Agent 實踐（Orchestrator–Worker、Generator–Critic、Superpowers Verification-Before-Completion、Git Worktree 隔離、Deterministic Hook Guard）並整合 **RFC-001 工程治理準則** 的 Agent Team 骨架。
 
-## 為什麼要 team，而不是單一 agent
+採用 **80% 通用核心 + 20% AI 平台特規（Adapter）** 設計：
+- **預設 AI**：Claude Code（`CLAUDE.md` + `.claude/`）
+- **內建第二 AI**：Gemini CLI（`GEMINI.md` + `.gemini/`）
+- **單一事實來源（SSOT）**：所有通用角色指令與協議統一維護在 `.agent-team/`，透過 `scripts/sync_adapters.py` 自動同步至各平台，由 CI 鎖死零漂移。
 
-單一 agent 的問題：
+---
 
-1. **貴的模型在做便宜的事**：搜尋檔案、讀程式碼、跑測試，都在燒最強模型的 token。
-2. **自己改自己的考卷**：同一個 context 寫的程式碼，由同一個 context 驗收，很容易「自己同意自己」。
-3. **context 會爆**：長任務把所有探索過程都塞進同一個視窗，越跑越笨，重開就全忘。
-4. **無法平行**：一次只能做一件事。
+## 為什麼採用 80/20 Agent Team
 
-Agent team 的解法：
-
-| 問題 | 解法 |
+| 傳統單一 Agent 痛點 | 本框架解法 |
 |---|---|
-| 成本 | 強模型只做規劃與決策，大量工作交給便宜模型 |
-| 自我驗收 | 由獨立的 verifier 判定 PASS / FAIL，maker 不能 grade 自己 |
-| context 爆掉 | 每個 subagent 有自己的 context，只回傳精簡結果；進度寫進 `STATE.md` |
-| 平行 | 不同檔案的任務交給多個 builder，各自在獨立 worktree |
+| 貴模型在做便宜搜尋、context 膨脹 | 強模型 Orchestrator 負責規劃與決策；便宜 `scout` 專責唯讀探索；獨立 context + `STATE.md` 持久化記憶 |
+| 自己改自己考卷 | `builder` 不可自判 PASS；獨立 `verifier`（能力不低於 builder）在隔離 worktree 跑確定性驗收 |
+| 平行寫檔互踩、交接斷裂 | 完整 **Worktree → Scope Gate → Verifier → Merge → Integration Gate** 交接協議 |
+| 靠 prompt 補丁治標不治本 | `STATE.md` 內建 `Failure log (1st occurrence)`，同類錯誤第二次必升級為確定性檢查（RFC-001 §1.1） |
+| 換 AI 工具整套規則重寫又漂移 | 80% 規範與防線完全跨平台共用；20% 僅處理各 AI 的模型、工具名、Worktree 與 Hook 協議 |
 
-## 團隊組成
+---
+
+## 團隊角色與模型分層（預設 Claude / 另支援 Gemini）
 
 ```
-                 ┌───────────────────────────┐
-     你 ───────▶ │ Orchestrator (主 session)  │  規劃、分派、做決定
-     BRIEF.md    │ CLAUDE.md / AGENTS.md      │  讀寫 PLAN.md、STATE.md
-                 └─────┬──────────┬──────────┬┘
-                       │          │          │
-              ┌────────▼──┐ ┌─────▼─────┐ ┌──▼────────┐
-              │  scout    │ │  builder  │ │ verifier  │
-              │  haiku    │ │  opus     │ │ sonnet    │
-              │  唯讀探索  │ │  一次一個  │ │  唯讀驗收  │
-              │  回傳摘要  │ │  任務     │ │ PASS/FAIL │
-              └───────────┘ │ worktree  │ └───────────┘
-                            └───────────┘
+                    ┌──────────────────────────────────────┐
+     你 ──────────▶ │  Orchestrator (主 session)            │  規劃、拆解、派工、合併、決策
+     BRIEF.md       │  Claude: claude-fable-5-2 (預設)      │  讀寫 PLAN.md / STATE.md
+                    │  Gemini: gemini-3-pro-preview        │  絕不可自判 PASS
+                    └──────┬───────────────┬──────────────┬┘
+                           │               │              │
+                  ┌────────▼───┐  ┌────────▼────┐  ┌──────▼──────┐
+                  │   scout    │  │   builder   │  │  verifier   │
+                  │ 唯讀探索    │  │ 一次一個任務 │  │  獨立驗收    │
+                  │ haiku /    │  │ worktree隔離 │  │ Scope+Gates │
+                  │ 3-flash    │  │ sonnet /    │  │ sonnet(hi)/ │
+                  └────────────┘  │ 3-pro       │  │ 3-pro       │
+                                  └─────────────┘  └─────────────┘
 ```
 
-| 角色 | 檔案 | 模型 | 權限 | 職責 |
+| 角色 | 權限層級 | Claude Code（預設 20%） | Gemini CLI（20%） | 職責 |
 |---|---|---|---|---|
-| Orchestrator | `CLAUDE.md` | 主 session（最強模型） | 全部 | 拆任務、寫 PLAN、分派、整合、決策 |
-| Scout | `.claude/agents/scout.md` | haiku | Read/Grep/Glob | 找檔案、讀程式碼，只回傳路徑與短摘錄 |
-| Builder | `.claude/agents/builder.md` | opus | 可寫，worktree 隔離 | 完成 PLAN 中的「一個」任務 |
-| Verifier | `.claude/agents/verifier.md` | sonnet | 唯讀 + Bash 跑測試 | 依驗收條件判 PASS / FAIL |
+| **Orchestrator** | coordinator | `claude-fable-5-2` | `gemini-3-pro-preview` | 拆任務、寫 `PLAN.md`/`STATE.md`、合併 PASS 分支 |
+| **Scout** | read-only | `haiku` (`effort: low`) | `gemini-3-flash-preview` (`max_turns: 12`) | 唯讀定位檔案與摘要回報 |
+| **Builder** | write (worktree) | `sonnet` (`effort: high`, 原生 `isolation: worktree`；高難度任務可升 `opus`) | `gemini-3-pro-preview` (`max_turns: 25`, 搭配 `worktree_ops.py`) | 完成 `PLAN.md` 單一任務並 commit |
+| **Verifier** | read-only-exec | `sonnet` (`effort: high`, 無寫入工具 + `PreToolUse` hook) | `gemini-3-pro-preview` (`max_turns: 15`, 無寫入工具 + `BeforeTool` hook) | 於目標 worktree 驗收 `PASS`/`FAIL` 與 `REPEAT:` |
 
-## 工作流程
+---
 
-1. 你填寫 `BRIEF.md`：目標、完成條件（可執行的檢查）、哪些事要先問你。
-2. Orchestrator 派 scout 摸清 repo，寫出 `PLAN.md`（小任務，每個都有驗收條件）。
-3. 每個任務交給 builder；改不同檔案的任務可平行。
-4. Builder 完成後一律交給 verifier。FAIL 帶著 verifier 的意見退回 builder，不是丟給你。
-5. 每個任務結束都更新 `STATE.md`；新 session 開始時先讀它。
-6. 同一個錯被 verifier 抓到兩次 → 先把它寫成一條自動檢查，再記到 `STATE.md` 的「Rules learned」並標註 `Check: <RULE-ID>`（RFC-001 §1.1：不准只靠 prompt 修正）。
-7. 只有真正的 blocker 或 `BRIEF.md` 列出的「先問我」事項才停下來找你。
+## 工作流程（完整閉環）
 
-## 目錄結構
+1. 你填寫 `BRIEF.md`：目標、可執行的「Done when」、與「Ask me before」紅線清單。
+2. Orchestrator 讀 `STATE.md` 與 `BRIEF.md`，派 `scout` 摸清 repo，撰寫 `PLAN.md`（每任務含 `Status`、`Owner`、`Files`、`Depends on`、`Acceptance`）。
+3. Orchestrator 為任務建立隔離 worktree（Claude 原生；Gemini 用 `scripts/worktree_ops.py create <T-ID>`），派 `builder` 實作並 commit。
+4. `builder` 交件前跑 `verify_scope.py`、`check_governance.py` 與 Acceptance，回報 `worktree_path`、`branch`、`commit`。
+5. Orchestrator 將狀態改為 `verify`，派 `verifier` **進入該 worktree** 獨立執行 Scope Gate + Acceptance + RFC-001 Gates + `check_team.py`，並對照 `STATE.md` 的 `Failure log`。
+6. 若 `FAIL`：先記進 `STATE.md`「Failure log (1st occurrence)」，退回 builder 重做（連 FAIL 3 次算 blocker）；若命中重複錯誤輸出 `REPEAT:`，開治理任務寫成確定性檢查，再寫入 `Rules learned`（`Check: <RULE-ID>`）。
+7. 若 `PASS`：Orchestrator 合併分支並清理 worktree；若同批合併 ≥ 2 個平行任務，重跑一次整合驗證。
+
+---
+
+## 目錄結構（80% 通用 / 20% 特規）
 
 ```
 .
-├── CLAUDE.md                 # Orchestrator 的指令（Claude Code 自動載入）
-├── AGENTS.md                 # 跨工具通用的團隊規範（Codex 等工具也讀）
-├── BRIEF.md                  # 你給團隊的任務書
-├── PLAN.md                   # Orchestrator 寫的任務清單
-├── STATE.md                  # 長期記憶：完成、失敗、學到的規則、下一步
+├── AGENTS.md                         # [80%] 跨 AI 團隊憲章（10 條通用準則）
+├── BRIEF.md                          # [80%] 人類交給團隊的任務書
+├── PLAN.md                           # [80%] 任務清單（含 Files、Depends on、Acceptance）
+├── STATE.md                          # [80%] 長期記憶（含 Failure log 與 Rules learned）
+├── .agent-team/                      # [80%] 團隊單一事實來源（SSOT）
+│   ├── config.json                   #       預設/啟用 Adapter 與角色矩陣
+│   ├── prompts/                      #       orchestrator / scout / builder / verifier 通用指令
+│   ├── protocols/                    #       Worktree 交接協議、80/20 Adapter 規範
+│   └── adapters/                     #       claude.json / gemini.json（20% 特規宣告）
+├── CLAUDE.md                         # [20%] Claude Code 入口（預設）
 ├── .claude/
-│   ├── settings.json         # 主 session 模型、權限、hooks
-│   └── agents/               # subagent 定義
-│       ├── scout.md
-│       ├── builder.md
-│       └── verifier.md
+│   ├── settings.json                 #       Claude 模型、細粒度權限、PreToolUse Hook
+│   └── agents/*.md                   #       由 sync_adapters.py 產生（禁手改）
+├── GEMINI.md                         # [20%] Gemini CLI 入口
+├── .gemini/
+│   ├── settings.json                 #       Gemini 模型、context 載入、BeforeTool Hook
+│   └── agents/*.md                   #       由 sync_adapters.py 產生（禁手改）
 ├── .governance/
-│   └── config.json           # 分層、禁用語法、escape hatch 規則
-├── src/{core,domain,ui}/     # RFC-001 §2.2 分層
-├── tests/                    # 檢查器本身的測試
-├── docs/
-│   ├── ARCHITECTURE.md       # 設計說明
-│   └── standards/
-│       └── RFC-001.md        # 團隊治理準則
+│   └── config.json                   # [80%] 分層、禁用原語、中英補丁註解與豁免規則
+├── src/{core,domain,ui}/             # [80%] RFC-001 §2.2 單向依賴分層
 ├── scripts/
-│   ├── check_team.py         # 團隊結構檢查（TEAM-*）
-│   └── check_governance.py   # RFC-001 程式碼檢查（GOV-*）
-└── .github/workflows/
-    └── team-check.yml        # CI 上跑同一份檢查
+│   ├── _report.py                    #       RFC-001 §1.2 自癒錯誤格式與路徑工具
+│   ├── check_team.py                 #       TEAM-001..007 團隊與跨平台結構檢查
+│   ├── check_governance.py           #       GOV-* 靜態分層、多行 import、計數型 Ratchet
+│   ├── verify_scope.py               #       SCOPE-001..002 PLAN.md Files 白名單檢查
+│   ├── guard_hook.py                 #       GUARD-001..005 跨 Claude/Gemini 工具攔截 Hook
+│   ├── sync_adapters.py              #       80/20 Subagent 同步與漂移檢查
+│   └── worktree_ops.py               #       跨平台 Worktree 建立／合併／清理工具
+├── tests/test_checks.py              #       所有檢查器與 Hook 的單元測試
+├── docs/
+│   ├── ARCHITECTURE.md               #       架構說明與設計決策
+│   └── standards/RFC-001.md          #       工程治理準則與 Enforcement Map
+└── .github/workflows/team-check.yml  #       CI Merge Gates（PR 與 push 皆保護）
 ```
+
+---
 
 ## 開始使用
 
+### 1. 驗證框架本身
+
 ```powershell
 cd D:\AI\Agent_Team
-python -m unittest discover -s tests
+python -m unittest discover -s tests -v
+python scripts/sync_adapters.py --check
 python scripts/check_team.py
 python scripts/check_governance.py
-claude
 ```
 
-把既有專案搬進 `src/` 時，先跑 `python scripts/check_governance.py --write-baseline` 建立 ratchet baseline（見 `docs/ARCHITECTURE.md`）。
+導入既有專案至 `src/` 時（限人類執行）：
+```powershell
+$env:ALLOW_BASELINE_WRITE = "1"
+python scripts/check_governance.py --write-baseline
+```
 
-進入 Claude Code 後，先編輯 `BRIEF.md`，再對 orchestrator 說：「讀 BRIEF.md 開始工作」。
+### 2. 使用預設 AI：Claude Code
 
-## 準則
+```powershell
+claude
+```
+先填寫 `BRIEF.md`，再告訴 Orchestrator：「讀 `BRIEF.md` 與 `STATE.md` 開始工作」。
 
-團隊治理以 [`docs/standards/RFC-001.md`](docs/standards/RFC-001.md) 為準。能自動檢查的規則都寫在 `scripts/check_team.py`，本機與 CI 都會跑。
+### 3. 切換使用 Gemini CLI
+
+```powershell
+gemini
+```
+進入後可用 `/agents list` 確認 `.gemini/agents/{scout,builder,verifier}.md` 已載入，再告訴 Orchestrator：「讀 `BRIEF.md` 與 `STATE.md` 開始工作」。
+
+### 4. 修改規則或角色指令
+
+- 改通用規則 → 編輯 `.agent-team/prompts/<role>.md`
+- 改平台特規 → 編輯 `.agent-team/adapters/{claude,gemini}.json`
+- 重新同步並檢查：
+  ```powershell
+  python scripts/sync_adapters.py
+  python scripts/check_team.py
+  ```

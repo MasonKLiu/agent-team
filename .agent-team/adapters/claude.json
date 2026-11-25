@@ -1,0 +1,36 @@
+{
+  "name": "claude",
+  "display_name": "Claude Code",
+  "is_default": true,
+  "entrypoint": "CLAUDE.md",
+  "settings_file": ".claude/settings.json",
+  "agents_dir": ".claude/agents",
+  "agent_format": "claude_md",
+  "orchestrator_model": "claude-fable-5-2",
+  "write_tools": ["Edit", "Write", "NotebookEdit", "MultiEdit"],
+  "shell_tools": ["Bash"],
+  "roles": {
+    "scout": {
+      "description": "唯讀探索。找檔案、讀程式碼、整理 repo 結構時使用。只回傳路徑與短摘錄，不修改任何東西。",
+      "model": "haiku",
+      "effort": "low",
+      "tools": ["Read", "Grep", "Glob"],
+      "addendum": "## Claude Code 特規（20%）\n\n- 只使用 `Read`、`Grep`、`Glob` 工具；此角色無 `Bash` 與寫入工具。\n- 避免一次讀取整個大檔，優先用 `Grep` 定位行號再用 `Read` 精準摘錄。"
+    },
+    "builder": {
+      "description": "實作 PLAN.md 中的「一個」任務。orchestrator 指定任務 ID 後使用。在 Claude 原生隔離 worktree 中工作。",
+      "model": "sonnet",
+      "effort": "high",
+      "isolation": "worktree",
+      "tools": ["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
+      "addendum": "## Claude Code 特規（20%）\n\n- 本角色已啟用 Claude 原生 `isolation: worktree`，你的檔案修改會自動隔離在獨立 git worktree 中。\n- 所有 `Bash` / `Edit` / `Write` 皆受 `.claude/settings.json` 的 `PreToolUse` hook（`scripts/guard_hook.py --adapter claude`）監控，試圖覆寫 `.governance/baseline.json` 或執行 `--write-baseline` 會被直接阻擋。\n- 交件時務必在回報中附上目前的 `git branch --show-current`、`pwd`（worktree 路徑）與最新 commit hash，供 `verifier` 鎖定驗收目標。\n- 若遇極高複雜度的核心架構／演算法任務，可由 Orchestrator 評估後於該任務改派 `opus` 模型執行。"
+    },
+    "verifier": {
+      "description": "獨立驗收 builder 完成的任務，於目標 worktree 依 PLAN.md Acceptance、Scope Gate 與 RFC-001 merge gates 判定 PASS 或 FAIL。",
+      "model": "sonnet",
+      "effort": "high",
+      "tools": ["Read", "Grep", "Glob", "Bash"],
+      "addendum": "## Claude Code 特規（20%）\n\n- 本角色刻意不授予 `Edit` / `Write` 工具，並透過 `.claude/settings.json` 的 `PreToolUse` hook 禁止破壞性指令。\n- 進入 Orchestrator 提供的 `worktree_path` 執行檢查指令（例如在該目錄下執行 `python scripts/verify_scope.py`、`python scripts/check_governance.py` 與測試），結束前以 `git status --porcelain` 確認未留下任何未追蹤或修改檔案。"
+    }
+  }
+}

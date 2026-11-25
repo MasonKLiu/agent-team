@@ -18,15 +18,27 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Checker self-tests
+      - name: Checker & guard self-tests
         run: python -m unittest discover -s tests -v
 
-      - name: Agent team structure (TEAM-*)
+      - name: 80/20 Adapter sync check (TEAM-007)
+        run: python scripts/sync_adapters.py --check
+
+      - name: Agent team structure (TEAM-001..007)
         run: python scripts/check_team.py
 
       - name: Gates 1, 2, 4 and ratchet (push)
         if: github.event_name == 'push'
-        run: python scripts/check_governance.py
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            python scripts/check_governance.py \
+              --changed-from "$BEFORE_SHA" \
+              --baseline-ref "$BEFORE_SHA"
+          else
+            python scripts/check_governance.py
+          fi
 
       - name: Gates 1-4 and ratchet (pull request)
         if: github.event_name == 'pull_request'

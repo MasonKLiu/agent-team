@@ -1,0 +1,36 @@
+{
+  "schema_version": "2.0",
+  "architecture": "80-20",
+  "default_adapter": "claude",
+  "enabled_adapters": ["claude", "gemini"],
+  "roles": {
+    "orchestrator": {
+      "access": "coordinator",
+      "can_grade_pass": false,
+      "isolation": "main",
+      "prompt": ".agent-team/prompts/orchestrator.md"
+    },
+    "scout": {
+      "access": "read-only",
+      "can_grade_pass": false,
+      "isolation": "inherit",
+      "prompt": ".agent-team/prompts/scout.md"
+    },
+    "builder": {
+      "access": "write",
+      "can_grade_pass": false,
+      "isolation": "worktree",
+      "prompt": ".agent-team/prompts/builder.md"
+    },
+    "verifier": {
+      "access": "read-only-exec",
+      "can_grade_pass": true,
+      "isolation": "inherit",
+      "prompt": ".agent-team/prompts/verifier.md"
+    }
+  },
+  "adapters": {
+    "claude": ".agent-team/adapters/claude.json",
+    "gemini": ".agent-team/adapters/gemini.json"
+  }
+}

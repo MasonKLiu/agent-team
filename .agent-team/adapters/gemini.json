@@ -1,0 +1,41 @@
+{
+  "name": "gemini",
+  "display_name": "Gemini CLI",
+  "is_default": false,
+  "entrypoint": "GEMINI.md",
+  "settings_file": ".gemini/settings.json",
+  "agents_dir": ".gemini/agents",
+  "agent_format": "gemini_md",
+  "orchestrator_model": "gemini-3-pro-preview",
+  "write_tools": ["write_file", "replace"],
+  "shell_tools": ["run_shell_command"],
+  "roles": {
+    "scout": {
+      "description": "唯讀探索。找檔案、讀程式碼、整理 repo 結構時使用。只回傳路徑與短摘錄，不修改任何東西。",
+      "kind": "local",
+      "model": "gemini-3-flash-preview",
+      "temperature": 0.1,
+      "max_turns": 12,
+      "tools": ["read_file", "grep_search", "glob"],
+      "addendum": "## Gemini CLI 特規（20%）\n\n- 本角色以 `gemini-3-flash-preview` 執行，僅授予 `read_file`、`grep_search`、`glob`，無寫入與 shell 權限。\n- 受 `max_turns: 12` 限制，請在單一輪次中盡量批次發出平行搜尋與讀檔呼叫，快速收斂回報。"
+    },
+    "builder": {
+      "description": "實作 PLAN.md 中的「一個」任務。在 Orchestrator 透過 scripts/worktree_ops.py 建立的獨立 worktree 中工作。",
+      "kind": "local",
+      "model": "gemini-3-pro-preview",
+      "temperature": 0.2,
+      "max_turns": 25,
+      "tools": ["read_file", "grep_search", "glob", "write_file", "replace", "run_shell_command"],
+      "addendum": "## Gemini CLI 特規（20%）\n\n- Gemini CLI 的 subagent frontmatter 目前沒有原生 `isolation: worktree` 欄位，因此**必須在 Orchestrator 預先透過 `python scripts/worktree_ops.py create <T-ID>` 建立的 `.agent-team/worktrees/<T-ID>` 目錄中作業**。\n- 開始寫檔前，先確認目標路徑位於 `.agent-team/worktrees/<T-ID>/` 下；若未收到 worktree 路徑，立即停止並回報 Orchestrator。\n- 所有 `write_file` / `replace` / `run_shell_command` 皆受 `.gemini/settings.json` 的 `BeforeTool` hook（`scripts/guard_hook.py --adapter gemini`）保護，試圖修改 `.governance/baseline.json` 或執行 `--write-baseline` 會收到 `{\"decision\": \"deny\"}` 阻擋。"
+    },
+    "verifier": {
+      "description": "獨立驗收 builder 完成的任務，於指定 worktree 依 PLAN.md Acceptance、Scope Gate 與 RFC-001 merge gates 判定 PASS 或 FAIL。",
+      "kind": "local",
+      "model": "gemini-3-pro-preview",
+      "temperature": 0.1,
+      "max_turns": 15,
+      "tools": ["read_file", "grep_search", "glob", "run_shell_command"],
+      "addendum": "## Gemini CLI 特規（20%）\n\n- 本角色僅授予 `read_file`、`grep_search`、`glob`、`run_shell_command`，不含 `write_file` 與 `replace`。\n- 請切換至 Orchestrator 指定的 `.agent-team/worktrees/<T-ID>` 目錄執行 `verify_scope.py`、`check_governance.py`、`check_team.py` 與測試指令。\n- 驗收完成前執行 `git status --porcelain`，確認沒有因測試產生未清理的修改。"
+    }
+  }
+}

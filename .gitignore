@@ -2,6 +2,8 @@
 *.pyc
 .claude/settings.local.json
 .claude/worktrees/
+.gemini/settings.local.json
+.agent-team/worktrees/
 node_modules/
 .env
 .env.*

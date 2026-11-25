@@ -18,18 +18,24 @@
       "layers": ["ui", "domain"],
       "name": "raw useLayoutEffect",
       "remediation": "Move the layout side effect into a declarative API in src/core."
+    },
+    {
+      "pattern": "\\bsetTimeout\\s*\\(",
+      "layers": ["ui", "domain"],
+      "name": "raw setTimeout",
+      "remediation": "Do not use setTimeout for timing workarounds in ui/domain (RFC-001 §2.3). Encapsulate legitimate timers as a declarative API in src/core."
     }
   ],
   "suppression_patterns": [
     "@ts-ignore",
     "@ts-expect-error",
     "@ts-nocheck",
-    "eslint-disable",
-    "\\bsetTimeout\\s*\\("
+    "eslint-disable"
   ],
   "justification_comment_patterns": [
     "//\\s*(because|hack|workaround|this is needed|needed because|don't touch|do not touch)\\b",
-    "/\\*\\s*(because|hack|workaround)\\b"
+    "/\\*\\s*(because|hack|workaround)\\b",
+    "(?://|/\\*)\\s*(因為|暫時|繞過|先這樣|別動|不要動)"
   ],
   "unauthorized_type_assertions": [
     "\\bas\\s+any\\b",
